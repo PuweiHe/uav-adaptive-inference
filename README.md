@@ -35,6 +35,12 @@ python -c "from router import route; print(route([('car', 0.6)]))"
 
 `audit.py` regenerates the checked-in summary from the two archived CSVs and the explicitly labeled report figures. It neither trains nor runs a detector. The router is a post-project reconstruction of the final report's rule, not recovered historical source. It accepts already-produced detections; an image inference adapter is not included.
 
+## Routing contract and verification scope
+
+The image score is `sum(confidence_i * class_F1_i) / number_of_boxes`, not a sum normalized by the weights. A score exactly equal to the threshold stays with the small model. Empty predictions select the large model and return `score=None`; detector exceptions and timeouts are separate adapter concerns, not empty predictions.
+
+The seven unit tests verify the reconstructed decision rule, not detector accuracy or the historical evaluation pipeline. Numeric validation rejects booleans, nonfinite values and values outside `[0,1]`; unknown class names are rejected. This is not a complete request-schema validator: malformed tuples or nonnumeric values may raise other Python exceptions. The implementation uses O(N) time and O(N) additional storage for N detections.
+
 ## Training evidence
 
 | Archived run | Classes shown in matrix | Epochs | Best validation AP50 | Best validation AP50:95 |
@@ -43,6 +49,8 @@ python -c "from router import route; print(route([('car', 0.6)]))"
 | YOLO11-nano | 10 | 120 | 0.44640 at 68 | 0.26551 at 70 |
 
 RT-DETR's retained configuration uses pretrained weights, 1280 input size, batch 6, AdamW, initial learning rate 5e-4, weight decay 1e-4, five warmup epochs and cosine decay. These are recorded settings, not controlled estimates of each parameter's benefit. Continuing training lowered training losses while validation quality weakened slightly, supporting validation-based checkpoint selection.
+
+Both archived configurations specify `mode=train` and `split=val`: the original `rtdetr_test` directory name does not make its epoch metrics test-set results. The recorded `max_det=300` deserves scrutiny for crowded scenes, but the final evaluator's setting and actual truncation behavior are unverified. An export-format field in a training configuration does not establish that model export or deployment occurred.
 
 The runs have different label spaces. Their validation scores are not a fair head-to-head comparison. The original five-class conversion and final checkpoint lineage must be recovered before reproducing the final comparison.
 
@@ -54,7 +62,7 @@ The runs have different label spaces. Their validation scores are not a fair hea
 | Large only | 0.5660 | 2867.25 | 100% |
 | Cascade | 0.5621 | 2346.85 | 78.7% |
 
-The cascade retained 99.3% of large-model mAP and avoided large-model calls on 21.3% of images. Call savings differ from time savings because every image still incurs the small-model pass. A constant per-image cost approximation gives 2490.23 seconds, which differs from the reported total; original timing logs are needed to resolve that discrepancy. These measurements do not establish real-time onboard deployment.
+The cascade retained 99.3% of large-model AP50 and avoided large-model calls on 21.3% of images. Call savings differ from time savings because every image still incurs the small-model pass. A constant per-image cost approximation gives 2490.23 seconds, which differs from the reported total; original timing logs are needed to resolve that discrepancy. These measurements do not establish real-time onboard deployment.
 
 ## Design limitations and next evidence
 
